@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.clipsync.app-mergeDebugResources-36:/values-watch-v20/values-watch-v20.xml",
+            "map": [
+                {
+                    "source": "/Users/chinmaybhushan/.gradle/caches/9.6.1/transforms/7aef71f79782ade8fce39e7692ec9ba9/transformed/appcompat-1.6.1/res/values-watch-v20/values-watch-v20.xml",
+                    "from": {
+                        "startLines": "2,5,8",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,214,385",
+                        "endLines": "4,7,10",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "209,380,553"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.clipsync.app-mergeDebugResources-36:/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+            "map": [
+                {
+                    "source": "/Users/chinmaybhushan/.gradle/caches/9.6.1/transforms/fa45676f458c220ef0fa88339eefdfe4/transformed/material-1.11.0/res/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "54",
+                        "endOffsets": "105"
+                    }
+                }
+            ]
+        }
+    ]
+}

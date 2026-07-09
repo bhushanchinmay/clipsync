@@ -1,0 +1,5 @@
+mac/venv/
+*.log
+__pycache__/
+*.pyc
+mac/com.clipsync.daemon.plist

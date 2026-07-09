@@ -1,0 +1,20 @@
+<resources>
+    <!-- Base dark theme colors -->
+    <color name="background_dark">#121212</color>  <!-- App background -->
+    <color name="surface_dark">#1E1E1E</color>     <!-- Card backgrounds -->
+
+    <!-- Teal accent palette -->
+    <color name="teal_accent">#4DB6AC</color>      <!-- Primary accent -->
+    <color name="teal_dark">#00695C</color>        <!-- Button backgrounds -->
+
+    <!-- Text hierarchy (higher contrast = more important) -->
+    <color name="text_primary">#FFFFFF</color>     <!-- Main text -->
+    <color name="text_secondary">#B0B0B0</color>   <!-- Section headers -->
+    <color name="text_tertiary">#888888</color>    <!-- Timestamps, metadata -->
+
+    <!-- Status indicator colors -->
+    <color name="status_connected">#4CAF50</color>     <!-- Green: connected -->
+    <color name="status_disconnected">#F44336</color>  <!-- Red: disconnected/error -->
+    <color name="status_searching">#FFC107</color>     <!-- Yellow: searching -->
+    <color name="status_connecting">#FFC107</color>    <!-- Yellow: connecting -->
+</resources>

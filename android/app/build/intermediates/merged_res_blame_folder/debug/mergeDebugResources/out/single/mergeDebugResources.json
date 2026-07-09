@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.clipsync.app-debug-38:/layout_activity_transparent.xml.flat",
+        "source": "com.clipsync.app-main-40:/layout/activity_transparent.xml"
+    },
+    {
+        "merged": "com.clipsync.app-debug-38:/drawable_ic_notification.xml.flat",
+        "source": "com.clipsync.app-main-40:/drawable/ic_notification.xml"
+    },
+    {
+        "merged": "com.clipsync.app-debug-38:/layout_activity_main.xml.flat",
+        "source": "com.clipsync.app-main-40:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.clipsync.app-debug-38:/drawable_ic_clipboard.xml.flat",
+        "source": "com.clipsync.app-main-40:/drawable/ic_clipboard.xml"
+    },
+    {
+        "merged": "com.clipsync.app-debug-38:/layout_item_clipboard_entry.xml.flat",
+        "source": "com.clipsync.app-main-40:/layout/item_clipboard_entry.xml"
+    }
+]

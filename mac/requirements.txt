@@ -1,0 +1,5 @@
+# ClipSync Mac Daemon Dependencies
+# pyobjc bridge for accessing macOS NSPasteboard (clipboard)
+pyobjc-framework-Cocoa
+# mDNS/Bonjour service advertisement for local network discovery
+zeroconf

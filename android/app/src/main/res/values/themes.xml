@@ -1,0 +1,37 @@
+<resources>
+    <!-- Main dark theme based on Material 3 -->
+    <!-- NoActionBar: we don't use the default ActionBar, giving us full control -->
+    <style name="Theme.ClipSync" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary color: teal accent for buttons, links, active elements -->
+        <item name="colorPrimary">#4DB6AC</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorPrimaryContainer">#00695C</item>
+        <item name="colorOnPrimaryContainer">#B2DFDB</item>
+        <!-- Secondary color: lighter teal for secondary elements -->
+        <item name="colorSecondary">#80CBC4</item>
+        <item name="colorOnSecondary">#000000</item>
+        <!-- Surface: card backgrounds and elevated surfaces -->
+        <item name="colorSurface">#121212</item>
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorSurfaceVariant">#1E1E1E</item>
+        <item name="colorOnSurfaceVariant">#CCCCCC</item>
+        <!-- Background: the base layer behind everything -->
+        <item name="android:colorBackground">#121212</item>
+        <item name="colorOnBackground">#FFFFFF</item>
+        <!-- System bars: slightly darker than the background -->
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:navigationBarColor">#0D0D0D</item>
+    </style>
+
+    <!-- Fully transparent theme for the clipboard-setting activity -->
+    <!-- All window attributes are set to make the activity completely invisible -->
+    <style name="Theme.ClipSync.Transparent">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>
