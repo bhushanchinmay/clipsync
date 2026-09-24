@@ -2,14 +2,14 @@
 
 **Seamless, local clipboard sync from Mac to Android over Wi-Fi.**
 
-Copy any text on your Mac — it's instantly available to paste on your Android phone. No internet required, no character limit, no cloud services. Just your local Wi-Fi network.
+Copy any text on your Mac — it's instantly available to paste on your Android phone. No internet required, no cloud services. Just your local Wi-Fi network.
 
 ## Features
 
 - 🔄 **Instant sync** — Copy on Mac, paste on Android within ~1 second
-- 📝 **No character limit** — Works with 20+ million characters (unlike KDE Connect's 20K limit)
+- 📝 **Large texts** — Syncs texts up to ~400 KB (hundreds of thousands of characters), far beyond KDE Connect's 20K limit
 - 🔌 **No internet needed** — Works over local Wi-Fi, even with no internet connection
-- 👻 **Invisible on Mac** — No app, no menu bar icon, no dock icon. Runs silently as a system daemon
+- 👻 **Invisible on Mac** — No menu bar icon, no dock icon. Runs silently as a background LaunchAgent
 - 📱 **Minimal Android app** — Just a persistent notification and clipboard history
 - 📋 **Clipboard history** — Browse and re-copy past clipboard entries on Android
 - 🔍 **Auto-discovery** — Devices find each other automatically via mDNS (like AirDrop)
@@ -32,7 +32,6 @@ Mac (copies text) → Wi-Fi (mDNS + TCP) → Android (sets clipboard)
 
 ```bash
 cd mac/
-chmod +x install.sh
 ./install.sh
 ```
 
@@ -60,8 +59,16 @@ launchctl unload ~/Library/LaunchAgents/com.clipsync.daemon.plist
 launchctl load ~/Library/LaunchAgents/com.clipsync.daemon.plist
 
 # Uninstall
-launchctl unload ~/Library/LaunchAgents/com.clipsync.daemon.plist
-rm ~/Library/LaunchAgents/com.clipsync.daemon.plist
+./install.sh --uninstall
+```
+
+`mac/ClipSync.app` is an optional double-click toggle (built from `ClipSync.applescript`) that starts or stops the daemon manually. It uses the same venv, so run `./install.sh` first.
+
+#### Running the tests
+
+```bash
+cd mac/
+venv/bin/python -m unittest test_server
 ```
 
 ### Android
@@ -105,6 +112,7 @@ See [PROTOCOL.md](PROTOCOL.md) for the full wire protocol specification.
 
 - **One-way only**: Mac → Android. Android → Mac is not supported due to Android OS restrictions on reading the clipboard from background services.
 - **Text only**: Does not sync images, files, or rich text formatting.
+- **Size**: Android's clipboard is filled through a ~1 MB Binder transaction, so texts larger than ~400 KB (UTF-8) are skipped on the phone with a notification. The Mac side has no limit.
 - **Same Wi-Fi**: Both devices must be on the same local network.
 - **Android sideload**: The app must be installed via APK, not from the Play Store.
 
