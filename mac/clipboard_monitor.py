@@ -12,7 +12,6 @@ import asyncio
 import hashlib
 import logging
 import threading
-import time
 from typing import Optional
 
 from AppKit import NSPasteboard

@@ -31,6 +31,10 @@ MDNS_SERVICE_TYPE = "_clipsync._tcp.local."
 # Chunk size for streaming large texts over TCP (64 KB)
 _CHUNK_SIZE = 64 * 1024  # 65,536 bytes
 
+# If a client's socket buffer doesn't drain for this long, treat it as dead.
+# Applied per chunk, so large texts to a slow-but-alive client still go through.
+_DRAIN_TIMEOUT_S = 10.0
+
 # Struct format for the 8-byte big-endian length header
 _HEADER_FMT = ">Q"
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)  # 8 bytes
@@ -53,10 +57,10 @@ class ClipSyncServer:
     def __init__(self) -> None:
         self._server: Optional[asyncio.AbstractServer] = None
         self._clients: Set[asyncio.StreamWriter] = set()
-        self._zeroconf: Optional[Zeroconf] = None
+        self._async_zeroconf: Optional[AsyncZeroconf] = None
         self._service_info: Optional[ServiceInfo] = None
         self._port: int = 0
-        # Lock to protect the _clients set during concurrent broadcasts
+        # Lock to protect the _clients set (held only briefly, never while sending)
         self._clients_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
@@ -121,12 +125,18 @@ class ClipSyncServer:
         Protocol:
             8-byte big-endian length header + UTF-8 body in 64 KB chunks.
 
-        Disconnected or errored clients are silently removed from the set.
+        Clients are sent to concurrently, so one slow or stalled client doesn't
+        delay the others.  Clients that error out or stop reading for
+        _DRAIN_TIMEOUT_S are dropped.
 
         Args:
             text: The clipboard text to broadcast.
         """
-        if not self._clients:
+        # Snapshot the client set so the lock isn't held while sending
+        async with self._clients_lock:
+            clients = list(self._clients)
+
+        if not clients:
             logger.debug("No clients connected — skipping broadcast")
             return
 
@@ -136,24 +146,32 @@ class ClipSyncServer:
         logger.info(
             "Broadcasting %d bytes to %d client(s)",
             len(text_bytes),
-            len(self._clients),
+            len(clients),
         )
 
-        dead_clients: list[asyncio.StreamWriter] = []
+        results = await asyncio.gather(
+            *(self._send_message(writer, header, text_bytes) for writer in clients),
+            return_exceptions=True,
+        )
 
-        async with self._clients_lock:
-            for writer in self._clients:
-                try:
-                    await self._send_message(writer, header, text_bytes)
-                except (ConnectionError, OSError, asyncio.CancelledError) as exc:
-                    peer = self._peer_name(writer)
-                    logger.warning("Client %s disconnected during broadcast: %s", peer, exc)
-                    dead_clients.append(writer)
+        dead_clients = []
+        for writer, result in zip(clients, results):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, (ConnectionError, OSError, asyncio.TimeoutError)):
+                peer = self._peer_name(writer)
+                logger.warning("Dropping client %s during broadcast: %r", peer, result)
+                dead_clients.append(writer)
+            elif isinstance(result, BaseException):
+                raise result
 
-            # Clean up dead connections
+        # Clean up dead connections
+        if dead_clients:
+            async with self._clients_lock:
+                for writer in dead_clients:
+                    self._clients.discard(writer)
             for writer in dead_clients:
-                self._clients.discard(writer)
-                self._close_writer(writer)
+                self._close_writer(writer, abort=True)
 
     # ------------------------------------------------------------------
     # Client handling
@@ -198,20 +216,24 @@ class ClipSyncServer:
         """
         Send the length header followed by the body in 64 KB chunks.
 
-        Using chunked writes prevents allocating a single massive buffer
-        for very large clipboard texts (20M+ characters).
+        Using chunked writes (over a memoryview, so no copies) avoids handing
+        the transport one massive buffer for very large clipboard texts.
+
+        Raises asyncio.TimeoutError if the client stops reading for
+        _DRAIN_TIMEOUT_S.
         """
         # Send the 8-byte length header
         writer.write(header)
-        await writer.drain()
+        await asyncio.wait_for(writer.drain(), timeout=_DRAIN_TIMEOUT_S)
 
         # Send body in chunks
+        view = memoryview(body)
         offset = 0
         total = len(body)
         while offset < total:
             end = min(offset + _CHUNK_SIZE, total)
-            writer.write(body[offset:end])
-            await writer.drain()
+            writer.write(view[offset:end])
+            await asyncio.wait_for(writer.drain(), timeout=_DRAIN_TIMEOUT_S)
             offset = end
 
     # ------------------------------------------------------------------
@@ -249,7 +271,7 @@ class ClipSyncServer:
 
     async def _unregister_mdns(self) -> None:
         """Cleanly unregister the mDNS service and close zeroconf."""
-        if getattr(self, "_async_zeroconf", None) is not None and getattr(self, "_service_info", None) is not None:
+        if self._async_zeroconf is not None and self._service_info is not None:
             try:
                 await self._async_zeroconf.async_unregister_service(self._service_info)
                 logger.info("mDNS service unregistered")
@@ -294,10 +316,16 @@ class ClipSyncServer:
         return "<unknown>"
 
     @staticmethod
-    def _close_writer(writer: asyncio.StreamWriter) -> None:
-        """Safely close a StreamWriter, ignoring errors."""
+    def _close_writer(writer: asyncio.StreamWriter, abort: bool = False) -> None:
+        """
+        Safely close a StreamWriter, ignoring errors.
+
+        With abort=True the connection is reset immediately instead of waiting
+        to flush buffered data — needed for stalled clients that never read.
+        """
         try:
-            if not writer.is_closing():
-                writer.close()
+            if abort:
+                writer.transport.abort()
+            writer.close()
         except Exception:
             pass
