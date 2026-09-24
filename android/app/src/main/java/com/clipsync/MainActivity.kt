@@ -1,8 +1,6 @@
 package com.clipsync
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -11,10 +9,11 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.clipsync.data.ClipboardDatabase
 import com.clipsync.databinding.ActivityMainBinding
-import kotlinx.coroutines.*
+import kotlinx.coroutines.launch
 
 /**
  * Main activity showing the ClipSync status and clipboard history.
@@ -86,20 +85,17 @@ class MainActivity : AppCompatActivity() {
         adapter = ClipboardHistoryAdapter { entry ->
             // Tapping copies the entry to clipboard
             // We need the full text, so fetch it from the database
-            CoroutineScope(Dispatchers.IO).launch {
+            lifecycleScope.launch {
+                // Room runs suspend queries off the main thread
                 val fullEntry = ClipboardDatabase.getInstance(this@MainActivity)
                     .clipboardDao().getById(entry.id)
                 if (fullEntry != null) {
-                    withContext(Dispatchers.Main) {
-                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("ClipSync", fullEntry.fullText)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Copied to clipboard",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                    val copied = ClipboardHelper.setClipboard(this@MainActivity, fullEntry.fullText)
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (copied) "Copied to clipboard" else "Couldn't copy to clipboard",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
@@ -211,6 +207,4 @@ class MainActivity : AppCompatActivity() {
         
         binding.toggleButton.text = getString(R.string.stop_service)
     }
-
-    private fun checkNotificationPermission() {}
 }

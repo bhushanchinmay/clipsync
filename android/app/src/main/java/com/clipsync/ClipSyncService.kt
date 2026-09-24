@@ -21,7 +21,7 @@ import kotlinx.coroutines.*
  * 1. Discovers the Mac daemon via mDNS (NsdHelper)
  * 2. Connects via TCP when found (TcpClient)
  * 3. Receives clipboard text from the Mac
- * 4. Sets the Android clipboard (via ClipboardHelper → TransparentClipboardActivity)
+ * 4. Sets the Android clipboard (via ClipboardHelper)
  * 5. Saves received text to Room database for history
  * 6. Shows persistent notification with connection status
  *
@@ -30,8 +30,9 @@ import kotlinx.coroutines.*
  * This prevents the system from killing our service to reclaim memory.
  * The notification also shows the user what's happening.
  *
- * The service type is "connectedDevice" which matches our use case
- * (maintaining a connection to an external device over the network).
+ * The service type is "dataSync" (declared in the manifest and passed to
+ * startForeground() on Android 14+). Note: apps targeting Android 15 (API 35)
+ * get a 6-hour daily limit on dataSync services.
  */
 class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback {
     companion object {
@@ -52,6 +53,10 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
     private lateinit var nsdHelper: NsdHelper
     private lateinit var tcpClient: TcpClient
     private lateinit var db: ClipboardDatabase
+
+    /** mDNS name of the service we are currently connected (or connecting) to */
+    @Volatile
+    private var currentServiceName: String? = null
 
     /** Coroutine scope tied to the service lifecycle */
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -111,8 +116,15 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
      * Called when NsdHelper resolves a ClipSync service on the network.
      * We now have the IP and port to connect to.
      */
-    override fun onServiceResolved(host: String, port: Int) {
+    override fun onServiceResolved(serviceName: String, host: String, port: Int) {
         Log.i(TAG, "Service resolved: $host:$port")
+        currentServiceName = serviceName
+        // The same service is often reported more than once (e.g. per network
+        // interface). Don't tear down a working connection to the same address.
+        if (tcpClient.isTargeting(host, port)) {
+            Log.d(TAG, "Already connected to $host:$port, ignoring")
+            return
+        }
         updateNotification("Connecting to $host:$port...")
         statusLiveData.postValue("Connecting to $host:$port...")
         tcpClient.connect(host, port)
@@ -122,8 +134,11 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
      * Called when the Mac daemon disappears from the network.
      * This could mean the Mac went to sleep, left the network, or the daemon stopped.
      */
-    override fun onServiceLost() {
-        Log.w(TAG, "Service lost")
+    override fun onServiceLost(serviceName: String) {
+        // Ignore other ClipSync services we aren't connected to
+        if (serviceName != currentServiceName) return
+        Log.w(TAG, "Service lost: $serviceName")
+        currentServiceName = null
         updateNotification("Server lost, searching...")
         statusLiveData.postValue("Server lost, searching...")
         tcpClient.disconnect()
@@ -142,7 +157,7 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
         Log.d(TAG, "Text received: ${text.length} chars")
 
         // Set the system clipboard
-        ClipboardHelper.setClipboard(this, text)
+        val copied = ClipboardHelper.setClipboard(this, text)
 
         // Save to database for history (on background thread)
         serviceScope.launch(Dispatchers.IO) {
@@ -163,9 +178,25 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
         }
 
         // Update UI
-        val preview = if (text.length > 50) text.take(50) + "..." else text
-        updateNotification("Received: $preview")
-        statusLiveData.postValue("Connected \u2022 Last: ${text.length} chars")
+        if (copied) {
+            val preview = if (text.length > 50) text.take(50) + "..." else text
+            updateNotification("Received: $preview")
+            statusLiveData.postValue("Connected \u2022 Last: ${text.length} chars")
+        } else {
+            updateNotification("Couldn't copy ${text.length} chars \u2014 saved to history")
+            statusLiveData.postValue("Connected \u2022 Last copy failed (${text.length} chars)")
+        }
+    }
+
+    /**
+     * Called when the Mac sent text too large for the Android clipboard.
+     * The text was discarded by TcpClient, so it isn't saved to history either.
+     */
+    override fun onTextTooLarge(byteCount: Long) {
+        Log.w(TAG, "Text too large for clipboard: $byteCount bytes")
+        val kb = byteCount / 1024
+        updateNotification("Skipped ${kb} KB copy \u2014 too large for the Android clipboard")
+        statusLiveData.postValue("Connected \u2022 Last: skipped (${kb} KB, too large)")
     }
 
     /**
@@ -184,7 +215,7 @@ class ClipSyncService : Service(), NsdHelper.NsdCallback, TcpClient.TcpCallback 
      * Start the service in the foreground with a persistent notification.
      *
      * Android 14 (API 34) requires specifying the foreground service type
-     * in startForeground(). We use FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+     * in startForeground(). We use FOREGROUND_SERVICE_TYPE_DATA_SYNC
      * which matches our manifest declaration.
      */
     private fun startForegroundWithNotification(text: String) {

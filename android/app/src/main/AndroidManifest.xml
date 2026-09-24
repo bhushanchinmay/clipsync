@@ -38,16 +38,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Invisible activity that briefly comes to foreground to set clipboard -->
-        <!-- Android 10+ blocks background clipboard access, so we need this trick -->
-        <activity
-            android:name=".TransparentClipboardActivity"
-            android:exported="false"
-            android:theme="@style/Theme.ClipSync.Transparent"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:configChanges="orientation|screenSize" />
 
         <!-- Foreground service that handles mDNS discovery and TCP connection -->
         <!-- dataSync type is used for network synchronization -->
