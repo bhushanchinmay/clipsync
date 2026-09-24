@@ -59,9 +59,11 @@ Body:   48 65 6C 6C 6F 2C 20 57 6F 72 6C 64 21  ("Hello, World!" in UTF-8)
 
 3. **No framing between chunks**: Chunks are NOT individually framed. The header specifies the total body length, and the body bytes follow contiguously.
 
-4. **Maximum size**: There is no protocol-level limit on text size. The 8-byte header supports up to 2^64 - 1 bytes (~18 exabytes).
+4. **Maximum size**: There is no protocol-level limit on text size. The 8-byte header supports up to 2^64 - 1 bytes (~18 exabytes). The Android client reads and discards bodies larger than 400,000 bytes (they can't fit on the Android clipboard) so the stream stays in sync, and treats a length of 2^63 or more as a protocol error and reconnects.
 
 5. **Encoding**: All text MUST be encoded as UTF-8.
+
+6. **Empty messages**: A length of 0 is valid and has no body. The Mac daemon never sends one (empty clipboards are ignored).
 
 ## Connection Lifecycle
 

@@ -1,71 +1,50 @@
 package com.clipsync
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.util.Log
 
 /**
- * Helper to set the system clipboard from a background service.
+ * Helper to set the system clipboard from the background service.
  *
- * THE PROBLEM:
- * Android 10+ (API 29+) blocks background apps from reading or writing the clipboard.
- * Our foreground service runs in the background, so it cannot call
- * ClipboardManager.setPrimaryClip() directly — the system silently ignores it.
+ * Android 10+ (API 29+) only restricts *reading* the clipboard from the
+ * background. Writing is always allowed, so the service can call
+ * ClipboardManager.setPrimaryClip() directly — no foreground activity needed.
+ * (Launching an activity from the background would itself be blocked by the
+ * Android 10+ background activity start restrictions.)
  *
- * THE SOLUTION:
- * We launch a transparent (invisible) activity that briefly comes to the foreground,
- * sets the clipboard, and immediately finishes. The user never sees it.
- *
- * WHY NOT USE INTENT EXTRAS?
- * Intent extras are limited by the Binder transaction size (~1MB). Since ClipSync
- * supports texts with 20M+ characters, we store the text in a static variable
- * instead. The TransparentClipboardActivity reads from this variable.
+ * SIZE LIMIT:
+ * setPrimaryClip() sends the text to the system clipboard service over Binder,
+ * whose transaction buffer is ~1MB (the text is sent as UTF-16). Texts larger
+ * than [MAX_TEXT_BYTES] of UTF-8 are therefore never delivered by TcpClient.
  */
 object ClipboardHelper {
     private const val TAG = "ClipboardHelper"
 
     /**
-     * Holds the text to be copied to the clipboard.
-     * Read by TransparentClipboardActivity.onCreate().
-     *
-     * @Volatile ensures visibility across threads — the service writes this
-     * on a background thread, and the activity reads it on the main thread.
+     * Largest UTF-8 body (in bytes) that we try to put on the clipboard.
+     * UTF-8 bytes >= UTF-16 chars, so this is at most ~800KB over Binder.
      */
-    @Volatile
-    var pendingText: String? = null
-        private set
+    const val MAX_TEXT_BYTES = 400_000L
 
     /**
-     * Sets the system clipboard by launching an invisible activity.
-     *
-     * Flow:
-     * 1. Store text in [pendingText]
-     * 2. Launch TransparentClipboardActivity
-     * 3. Activity reads [pendingText], calls setPrimaryClip(), finishes
+     * Sets the system clipboard.
      *
      * @param context Application or service context
      * @param text The text to copy to the clipboard
+     * @return true if the clipboard was set, false if the system rejected it
      */
-    fun setClipboard(context: Context, text: String) {
-        Log.d(TAG, "Queuing clipboard text (${text.length} chars)")
-        pendingText = text
-
-        val intent = Intent(context, TransparentClipboardActivity::class.java).apply {
-            // NEW_TASK: required when starting an activity from a non-activity context
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            // NO_ANIMATION: prevent any visual transition
-            addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            // EXCLUDE_FROM_RECENTS: don't show in the recent apps list
-            addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+    fun setClipboard(context: Context, text: String): Boolean {
+        return try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("ClipSync", text))
+            Log.d(TAG, "Clipboard set (${text.length} chars)")
+            true
+        } catch (e: Exception) {
+            // e.g. TransactionTooLargeException wrapped in a RuntimeException
+            Log.e(TAG, "Failed to set clipboard (${text.length} chars)", e)
+            false
         }
-        context.startActivity(intent)
-    }
-
-    /**
-     * Clears the pending text after it has been copied.
-     * Called by TransparentClipboardActivity to free the memory.
-     */
-    fun clearPending() {
-        pendingText = null
     }
 }

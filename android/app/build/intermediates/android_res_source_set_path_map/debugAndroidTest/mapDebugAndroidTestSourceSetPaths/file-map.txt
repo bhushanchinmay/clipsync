@@ -1,6 +1,0 @@
-com.clipsync.test.app-androidTest-0 /Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/generated/res/resValues/androidTest/debug
-com.clipsync.test.app-updated_navigation_xml-1 /Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/generated/updated_navigation_xml/debugAndroidTest
-com.clipsync.test.app-mergeDebugAndroidTestResources-2 /Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/merged.dir
-com.clipsync.test.app-mergeDebugAndroidTestResources-3 /Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/stripped.dir
-com.clipsync.test.app-debugAndroidTest-4 /Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/intermediates/merged_res/debugAndroidTest/mergeDebugAndroidTestResources
-gradleHome-0 /Users/chinmaybhushan/.gradle

@@ -1,7 +1,0 @@
-#Thu Jul 09 23:18:22 IST 2026
-base.0=/Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
-base.1=/Users/chinmaybhushan/Documents/projects/tools_scripts/clipboard-sync/android/app/build/intermediates/global_synthetics_dex/debugAndroidTest/generateDebugAndroidTestGlobalSynthetics/classes.dex
-path.0=0/classes.dex
-path.1=classes.dex
-renamed.0=classes.dex
-renamed.1=classes2.dex

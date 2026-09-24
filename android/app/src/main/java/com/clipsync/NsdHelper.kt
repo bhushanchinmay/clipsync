@@ -32,9 +32,9 @@ class NsdHelper(
     /** Callback interface for service discovery events */
     interface NsdCallback {
         /** Called when a ClipSync service is found and resolved to an IP:port */
-        fun onServiceResolved(host: String, port: Int)
+        fun onServiceResolved(serviceName: String, host: String, port: Int)
         /** Called when a previously discovered service disappears from the network */
-        fun onServiceLost()
+        fun onServiceLost(serviceName: String)
     }
 
     private val nsdManager: NsdManager =
@@ -49,7 +49,19 @@ class NsdHelper(
         (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
             .createMulticastLock("ClipSync_mDNS_lock")
 
+    @Volatile
     private var isDiscovering = false
+
+    /**
+     * Services waiting to be resolved. Before API 34, NsdManager handles only one
+     * resolve at a time: reusing a listener that is still in use throws
+     * IllegalArgumentException, and a concurrent resolve fails with
+     * FAILURE_ALREADY_ACTIVE. So resolves are queued and run one after another.
+     * Guarded by [resolveLock].
+     */
+    private val pendingResolves = ArrayDeque<NsdServiceInfo>()
+    private var isResolving = false
+    private val resolveLock = Any()
 
     /**
      * NSD discovery listener — receives callbacks when services are found/lost.
@@ -72,12 +84,12 @@ class NsdHelper(
             Log.d(TAG, "Service found: ${serviceInfo.serviceName} type=${serviceInfo.serviceType}")
             // Resolve the service to get its IP address and port
             // We resolve any service of our type — the Mac daemon will be the only one
-            nsdManager.resolveService(serviceInfo, resolveListener)
+            enqueueResolve(serviceInfo)
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
             Log.w(TAG, "Service lost: ${serviceInfo.serviceName}")
-            callback.onServiceLost()
+            callback.onServiceLost(serviceInfo.serviceName)
         }
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -94,13 +106,17 @@ class NsdHelper(
 
     /**
      * NSD resolve listener — converts a service name into an actual IP:port.
-     * 
+     *
      * Resolution involves querying the network for the service's SRV and A/AAAA records.
      * This gives us the concrete address we need to open a TCP connection.
+     *
+     * A new listener is created per resolve; when it finishes, the next queued
+     * service (if any) is resolved.
      */
-    private val resolveListener = object : NsdManager.ResolveListener {
+    private inner class ResolveListener : NsdManager.ResolveListener {
         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
             Log.e(TAG, "Resolve failed: ${serviceInfo.serviceName}, errorCode=$errorCode")
+            resolveFinished()
         }
 
         override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
@@ -109,9 +125,42 @@ class NsdHelper(
             Log.i(TAG, "Service resolved: $host:$port (${serviceInfo.serviceName})")
 
             if (host != null && port > 0) {
-                callback.onServiceResolved(host, port)
+                callback.onServiceResolved(serviceInfo.serviceName, host, port)
             } else {
                 Log.e(TAG, "Resolved service has invalid host=$host or port=$port")
+            }
+            resolveFinished()
+        }
+    }
+
+    /** Queue [serviceInfo] for resolution, skipping duplicates already queued. */
+    private fun enqueueResolve(serviceInfo: NsdServiceInfo) {
+        synchronized(resolveLock) {
+            if (pendingResolves.none { it.serviceName == serviceInfo.serviceName }) {
+                pendingResolves.addLast(serviceInfo)
+            }
+            if (!isResolving) resolveNextLocked()
+        }
+    }
+
+    private fun resolveFinished() {
+        synchronized(resolveLock) {
+            isResolving = false
+            resolveNextLocked()
+        }
+    }
+
+    /** Start resolving the next queued service. Caller must hold [resolveLock]. */
+    @Suppress("DEPRECATION") // resolveService is replaced by registerServiceInfoCallback on API 34+
+    private fun resolveNextLocked() {
+        while (pendingResolves.isNotEmpty()) {
+            val next = pendingResolves.removeFirst()
+            try {
+                nsdManager.resolveService(next, ResolveListener())
+                isResolving = true
+                return
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to resolve ${next.serviceName}", e)
             }
         }
     }
@@ -152,6 +201,10 @@ class NsdHelper(
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop discovery", e)
             }
+        }
+
+        synchronized(resolveLock) {
+            pendingResolves.clear()
         }
 
         // Release the multicast lock to restore battery optimization
